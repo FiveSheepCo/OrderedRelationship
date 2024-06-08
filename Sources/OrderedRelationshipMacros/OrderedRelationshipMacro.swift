@@ -55,7 +55,15 @@ extension OrderedRelationshipMacro: PeerMacro {
         } else {
             throw OrderedRelationshipError.message("Could not infer the items class name, please provide one using the `itemClassName` argument.")
         }
-        
+
+        // Find inverseRelationshipName
+        let inverseRelationshipName: String
+        if let name = argumentList.first(labeled: "inverseRelationshipName")?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue {
+            inverseRelationshipName = name
+        } else {
+            inverseRelationshipName = "superitem"
+        }
+
         // Make sure there is no accessorBlock
         guard binding.accessorBlock == nil else {
             throw OrderedRelationshipError.message("@OrderedRelationship does not support get and set blocks")
@@ -75,7 +83,7 @@ extension OrderedRelationshipMacro: PeerMacro {
             @Model
             class \(orderedClass) {
                 var order: Int = 0
-                @Relationship(deleteRule: \(raw: deleteRule), inverse: \\\(raw: itemClassName).superitem) var item: \(raw: itemClassName)? = nil
+                @Relationship(deleteRule: \(raw: deleteRule), inverse: \\\(raw: itemClassName).\(raw: inverseRelationshipName)) var item: \(raw: itemClassName)? = nil
                 @Relationship(deleteRule: .nullify, inverse: \\\(raw: className).\(raw: orderedVariableName)) var container: \(raw: className)? = nil
                 
                 init(order: Int, item: \(raw: itemClassName), container: \(raw: className)) {
