@@ -1,6 +1,6 @@
 import SwiftData
 
-/// A macro that makes a relationship an ordered relationship. It has to be appliced to a variable declaration that is an optional array containing a type name that is not yet defined. For example:
+/// A macro that makes a relationship an ordered relationship. It has to be applied to a variable declaration that is an optional array containing a type name that is not yet defined. For example:
 ///
 ///     @OrderedRelationship var rawSubItems: [OrderedSubItem]? = nil
 ///
