@@ -7,13 +7,19 @@ import SwiftSyntaxMacros
 
 public struct OrderedRelationshipMacro {}
 
+extension LabeledExprListSyntax {
+    fileprivate func argumentValue(labeled name: String) -> String? {
+        return first(labeled: name)?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
+    }
+}
+
 extension OrderedRelationshipMacro: PeerMacro {
     
     public static func expansion(of node: SwiftSyntax.AttributeSyntax, providingPeersOf declaration: some SwiftSyntax.DeclSyntaxProtocol, in context: some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.DeclSyntax] {
         
         let argumentList = node.arguments?.as(LabeledExprListSyntax.self) ?? []
-        let containingModelName: String? = argumentList.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
-        
+        let containingModelName = argumentList.argumentValue(labeled: "containingClassName")
+
         // Find variable and its name
         guard
             let varDecl = declaration.as(VariableDeclSyntax.self),
@@ -25,7 +31,7 @@ extension OrderedRelationshipMacro: PeerMacro {
         
         // Find the item variable name
         let itemsVariableName: String
-        if let name = argumentList.first(labeled: "arrayVariableName")?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue {
+        if let name = argumentList.argumentValue(labeled: "arrayVariableName") {
             itemsVariableName = name
         } else if let name = try! Regex("[a-z]+([A-Z].*)").wholeMatch(in: orderedVariableName)?[1].substring {
             var name = String(name)
@@ -33,7 +39,7 @@ extension OrderedRelationshipMacro: PeerMacro {
             name.insert(contentsOf: firstLetter.lowercased(), at: name.startIndex)
             itemsVariableName = name
         } else {
-            throw OrderedRelationshipError.message("Could not infer the items class name, please provide one using the `itemClassName` argument.")
+            throw OrderedRelationshipError.message("Could not infer the items class name, please provide one using the `arrayVariableName` argument.")
         }
         
         // Extract optional array type
@@ -48,14 +54,17 @@ extension OrderedRelationshipMacro: PeerMacro {
         
         // Find the item class name
         let itemClassName: String
-        if let itemModelName = argumentList.first(labeled: "itemClassName")?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue {
+        if let itemModelName = argumentList.argumentValue(labeled: "itemClassName") {
             itemClassName = itemModelName
         } else if let itemModelName = try! Regex("[A-Z][a-z]*(.+)").wholeMatch(in: orderedClassName)?[1].substring {
             itemClassName = String(itemModelName)
         } else {
             throw OrderedRelationshipError.message("Could not infer the items class name, please provide one using the `itemClassName` argument.")
         }
-        
+
+        // Find inverseRelationshipName
+        let inverseRelationshipName = argumentList.argumentValue(labeled: "inverseRelationshipName") ?? "superitem"
+
         // Make sure there is no accessorBlock
         guard binding.accessorBlock == nil else {
             throw OrderedRelationshipError.message("@OrderedRelationship does not support get and set blocks")
@@ -75,7 +84,7 @@ extension OrderedRelationshipMacro: PeerMacro {
             @Model
             class \(orderedClass) {
                 var order: Int = 0
-                @Relationship(deleteRule: \(raw: deleteRule), inverse: \\\(raw: itemClassName).superitem) var item: \(raw: itemClassName)? = nil
+                @Relationship(deleteRule: \(raw: deleteRule), inverse: \\\(raw: itemClassName).\(raw: inverseRelationshipName)) var item: \(raw: itemClassName)? = nil
                 @Relationship(deleteRule: .nullify, inverse: \\\(raw: className).\(raw: orderedVariableName)) var container: \(raw: className)? = nil
                 
                 init(order: Int, item: \(raw: itemClassName), container: \(raw: className)) {
