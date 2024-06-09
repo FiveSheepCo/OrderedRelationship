@@ -296,10 +296,12 @@ final class OrderedRelationshipTests: XCTestCase {
 
     func testOmittedContainingClassName() throws {
 #if canImport(OrderedRelationshipMacros)
+        let fileName = "MyItem"
+
         assertMacroExpansion(
             """
             @Model
-            final class OrderedRelationshipTests {
+            final class \(fileName) {
                 @OrderedRelationship(inverseRelationshipName: "parentItem")
                 var rawSubItems: [OrderedSubItem]? = []
 
@@ -308,23 +310,23 @@ final class OrderedRelationshipTests: XCTestCase {
 
             @Model
             class SubItem {
-                var parentItem: OrderedRelationshipTests.OrderedSubItem? = nil
+                var parentItem: \(fileName).OrderedSubItem? = nil
 
                 init() {}
             }
             """,
             expandedSource: """
             @Model
-            final class OrderedRelationshipTests {
+            final class \(fileName) {
                 var rawSubItems: [OrderedSubItem]? = []
 
                 @Model
                 class OrderedSubItem {
                     var order: Int = 0
                     @Relationship(deleteRule: .cascade, inverse: \\SubItem.parentItem) var item: SubItem? = nil
-                    @Relationship(deleteRule: .nullify, inverse: \\OrderedRelationshipTests.rawSubItems) var container: Item? = nil
+                    @Relationship(deleteRule: .nullify, inverse: \\\(fileName).rawSubItems) var container: \(fileName)? = nil
 
-                    init(order: Int, item: SubItem, container: Item) {
+                    init(order: Int, item: SubItem, container: \(fileName)) {
                         self.order = order
 
                         guard let context = container.modelContext else {
@@ -423,12 +425,13 @@ final class OrderedRelationshipTests: XCTestCase {
 
             @Model
             class SubItem {
-                var parentItem: OrderedRelationshipTests.OrderedSubItem? = nil
+                var parentItem: \(fileName).OrderedSubItem? = nil
 
                 init() {}
             }
             """,
-            macros: testMacros
+            macros: testMacros,
+            testFileName: fileName + ".swift"
         )
 #else
         throw XCTSkip("macros are only supported when running tests for the host platform")
