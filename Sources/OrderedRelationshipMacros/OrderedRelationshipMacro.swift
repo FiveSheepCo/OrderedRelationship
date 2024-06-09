@@ -18,8 +18,8 @@ extension OrderedRelationshipMacro: PeerMacro {
     public static func expansion(of node: SwiftSyntax.AttributeSyntax, providingPeersOf declaration: some SwiftSyntax.DeclSyntaxProtocol, in context: some SwiftSyntaxMacros.MacroExpansionContext) throws -> [SwiftSyntax.DeclSyntax] {
         
         let argumentList = node.arguments?.as(LabeledExprListSyntax.self) ?? []
-        let containingModelName: String? = argumentList.first?.expression.as(StringLiteralExprSyntax.self)?.representedLiteralValue
-        
+        let containingModelName = argumentList.argumentValue(labeled: "containingClassName")
+
         // Find variable and its name
         guard
             let varDecl = declaration.as(VariableDeclSyntax.self),
