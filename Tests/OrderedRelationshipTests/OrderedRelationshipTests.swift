@@ -437,4 +437,259 @@ final class OrderedRelationshipTests: XCTestCase {
         throw XCTSkip("macros are only supported when running tests for the host platform")
 #endif
     }
+
+    func testAllArguments() throws {
+#if canImport(OrderedRelationshipMacros)
+        assertMacroExpansion(
+            """
+            @Model
+            final class DocumentOutline {
+                @OrderedRelationship(containingClassName: "DocumentOutline",
+                                     itemClassName: "DocumentSection",
+                                     inverseRelationshipName: "containingDocument",
+                                     arrayVariableName: "topLevelSections",
+                                     deleteRule: Schema.Relationship.DeleteRule.nullify)
+                var rawSections: [OrderedSection]? = []
+
+                init() {}
+            }
+
+            @Model
+            class DocumentSection {
+                var containingDocument: DocumentOutline.OrderedSection? = nil
+                var containingSection: DocumentSection.OrderedSection? = nil
+
+                @OrderedRelationship(containingClassName: "DocumentSection",
+                                     itemClassName: "DocumentSection",
+                                     inverseRelationshipName: "containingSection",
+                                     arrayVariableName: "subSections",
+                                     deleteRule: .noAction)
+                var rawSubSections: [OrderedSection]? = []
+
+                init() {}
+            }
+            """,
+            expandedSource: """
+            @Model
+            final class DocumentOutline {
+                var rawSections: [OrderedSection]? = []
+
+                @Model
+                class OrderedSection {
+                    var order: Int = 0
+                    @Relationship(deleteRule: Schema.Relationship.DeleteRule.nullify, inverse: \\DocumentSection.containingDocument) var item: DocumentSection? = nil
+                    @Relationship(deleteRule: .nullify, inverse: \\DocumentOutline.rawSections) var container: DocumentOutline? = nil
+
+                    init(order: Int, item: DocumentSection, container: DocumentOutline) {
+                        self.order = order
+
+                        guard let context = container.modelContext else {
+                            fatalError("Given container for OrderedSection has no modelContext.")
+                        }
+                        context.insert(self)
+
+                        if item.modelContext == nil {
+                            context.insert(item)
+                        } else if item.modelContext != context {
+                            fatalError("New item has different modelContext than its container.")
+                        }
+
+                        self.item = item
+                        self.container = container
+                    }
+                }
+
+                var topLevelSections: [DocumentSection] {
+                    get {
+                        (rawSections ?? []).sorted(using: SortDescriptor(\\.order)).compactMap(\\.item)
+                    }
+                    set {
+                        guard let modelContext else {
+                            fatalError("\\(self) is not inserted into a ModelContext yet.")
+                        }
+
+                        var oldOrder = (rawSections ?? []).sorted(using: SortDescriptor(\\.order))
+                        let newOrder = newValue.map({ newValueItem in
+                            oldOrder.first {
+                                $0.item == newValueItem
+                            } ?? .init(order: 0, item: newValueItem, container: self)
+                        })
+                        let differences = newOrder.difference(from: oldOrder)
+
+                        func completelyRearrangeArray() {
+                            let count = newOrder.count
+                            switch count {
+                                case 0:
+                                    return
+                                case 1:
+                                    newOrder[0].order = 0
+                                    return
+                                default:
+                                    break
+                            }
+
+                            let offset = Int.min / 2
+                            let portion = Int.max / (count - 1)
+
+                            for index in 0 ..< count {
+                                newOrder[index].order = offset + portion * index
+                            }
+                        }
+
+                        for difference in differences {
+                            switch difference {
+                                case .remove(let offset, let element, _):
+                                    if !newOrder.contains(element) {
+                                        modelContext.delete(element)
+                                    }
+                                    oldOrder.remove(at: offset)
+                                case .insert(let offset, let element, _):
+                                    if oldOrder.isEmpty {
+                                        element.order = 0
+                                        oldOrder.insert(element, at: offset)
+                                        continue
+                                    }
+
+                                    var from = Int.min / 2
+                                    var to = Int.max / 2
+
+                                    if offset > 0 {
+                                        from = oldOrder[offset - 1].order + 1
+                                    }
+                                    if offset < oldOrder.count {
+                                        to = oldOrder[offset].order
+                                    }
+
+                                    guard from < to else {
+                                        completelyRearrangeArray()
+                                        return
+                                    }
+
+                                    let range: Range<Int> = from ..< to
+                                    element.order = range.randomElement()!
+
+                                    oldOrder.insert(element, at: offset)
+                            }
+                        }
+                    }
+                }
+
+                init() {}
+            }
+
+            @Model
+            class DocumentSection {
+                var containingDocument: DocumentOutline.OrderedSection? = nil
+                var containingSection: DocumentSection.OrderedSection? = nil
+                var rawSubSections: [OrderedSection]? = []
+
+                @Model
+                class OrderedSection {
+                    var order: Int = 0
+                    @Relationship(deleteRule: .noAction, inverse: \\DocumentSection.containingSection) var item: DocumentSection? = nil
+                    @Relationship(deleteRule: .nullify, inverse: \\DocumentSection.rawSubSections) var container: DocumentSection? = nil
+
+                    init(order: Int, item: DocumentSection, container: DocumentSection) {
+                        self.order = order
+
+                        guard let context = container.modelContext else {
+                            fatalError("Given container for OrderedSection has no modelContext.")
+                        }
+                        context.insert(self)
+
+                        if item.modelContext == nil {
+                            context.insert(item)
+                        } else if item.modelContext != context {
+                            fatalError("New item has different modelContext than its container.")
+                        }
+
+                        self.item = item
+                        self.container = container
+                    }
+                }
+
+                var subSections: [DocumentSection] {
+                    get {
+                        (rawSubSections ?? []).sorted(using: SortDescriptor(\\.order)).compactMap(\\.item)
+                    }
+                    set {
+                        guard let modelContext else {
+                            fatalError("\\(self) is not inserted into a ModelContext yet.")
+                        }
+
+                        var oldOrder = (rawSubSections ?? []).sorted(using: SortDescriptor(\\.order))
+                        let newOrder = newValue.map({ newValueItem in
+                            oldOrder.first {
+                                $0.item == newValueItem
+                            } ?? .init(order: 0, item: newValueItem, container: self)
+                        })
+                        let differences = newOrder.difference(from: oldOrder)
+
+                        func completelyRearrangeArray() {
+                            let count = newOrder.count
+                            switch count {
+                                case 0:
+                                    return
+                                case 1:
+                                    newOrder[0].order = 0
+                                    return
+                                default:
+                                    break
+                            }
+
+                            let offset = Int.min / 2
+                            let portion = Int.max / (count - 1)
+
+                            for index in 0 ..< count {
+                                newOrder[index].order = offset + portion * index
+                            }
+                        }
+
+                        for difference in differences {
+                            switch difference {
+                                case .remove(let offset, let element, _):
+                                    if !newOrder.contains(element) {
+                                        modelContext.delete(element)
+                                    }
+                                    oldOrder.remove(at: offset)
+                                case .insert(let offset, let element, _):
+                                    if oldOrder.isEmpty {
+                                        element.order = 0
+                                        oldOrder.insert(element, at: offset)
+                                        continue
+                                    }
+
+                                    var from = Int.min / 2
+                                    var to = Int.max / 2
+
+                                    if offset > 0 {
+                                        from = oldOrder[offset - 1].order + 1
+                                    }
+                                    if offset < oldOrder.count {
+                                        to = oldOrder[offset].order
+                                    }
+
+                                    guard from < to else {
+                                        completelyRearrangeArray()
+                                        return
+                                    }
+
+                                    let range: Range<Int> = from ..< to
+                                    element.order = range.randomElement()!
+
+                                    oldOrder.insert(element, at: offset)
+                            }
+                        }
+                    }
+                }
+
+                init() {}
+            }
+            """,
+            macros: testMacros
+        )
+#else
+        throw XCTSkip("macros are only supported when running tests for the host platform")
+#endif
+    }
 }
