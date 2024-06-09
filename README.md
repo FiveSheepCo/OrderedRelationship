@@ -59,6 +59,9 @@ The name of the class containing the declaration (`Item` in the example above). 
 ### itemClassName
 The name of the class that the items are. If `nil`, will be inferred by name of the declared array contents without the prefix. In the example above with the array contents being of type `OrderedSubItem`, the type should be `SubItem`.
 
+### inverseRelationshipName
+The name of the property in `itemClassName` to use for the inverse relationship. Defaults to `superitem`, and in the example above would be `SubItem.superitem`. You are always required to create a property for the inverse relationship, and this argument allows you to tell the macro what it is.
+
 ### arrayVariableName
 The variable name of the resulting array. If `nil`, will be inferred by the name of the declared variable without the prefix. In the example above with the variable name being called `orderedSubItems`, the resulting array will be called `subItems`.
 
